@@ -9,8 +9,10 @@ dayjs.extend(utc);
 import { User } from "../models/User.js";
 import { CalendarEvent } from "../models/CalendarEvent.js";
 
-// -------------------- Extract meeting link --------------------
-const extractMeetingLink = (event) => {
+/* ------------------------------------------------------------
+   Extract Meeting URL + Platform
+------------------------------------------------------------ */
+const extractMeetingInfo = (event) => {
   const text = `
     ${event.location || ""}
     ${event.description || ""}
@@ -18,21 +20,28 @@ const extractMeetingLink = (event) => {
   `.toLowerCase();
 
   const patterns = [
-    /https:\/\/meet\.google\.com\/[a-z0-9-]+/i,
-    /https:\/\/zoom\.us\/j\/[0-9]+/i,
-    /https:\/\/([^ ]+)?teams\.microsoft\.com\/[^\s]+/i,
-    /https:\/\/.*webex\.com\/[^\s]+/i,
+    { platform: "google_meet", regex: /https:\/\/meet\.google\.com\/[a-z0-9-]+/i },
+    { platform: "zoom", regex: /https:\/\/zoom\.us\/j\/[0-9]+/i },
+    { platform: "teams", regex: /https:\/\/([^ ]+)?teams\.microsoft\.com\/[^\s]+/i },
+    { platform: "webex", regex: /https:\/\/.*webex\.com\/[^\s]+/i },
   ];
 
   for (const p of patterns) {
-    const m = text.match(p);
-    if (m) return m[0];
+    const m = text.match(p.regex);
+    if (m) {
+      return {
+        meeting_url: m[0],
+        meeting_platform: p.platform,
+      };
+    }
   }
 
-  return null;
+  return null; // no valid meeting URL found
 };
 
-// -------------------- OAuth Client --------------------
+/* ------------------------------------------------------------
+   OAuth Client for Google Calendar
+------------------------------------------------------------ */
 const getOAuthClient = (user) => {
   const oauth2 = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -48,13 +57,17 @@ const getOAuthClient = (user) => {
   return oauth2;
 };
 
-// -------------------- Google Server Time --------------------
+/* ------------------------------------------------------------
+   Google Server Time (official)
+------------------------------------------------------------ */
 async function getGoogleServerTime() {
   const res = await axios.get("https://www.google.com/generate_204");
-  return dayjs(res.headers.date); // ✓ real Google server time
+  return dayjs(res.headers.date); // Google server time in UTC
 }
 
-// -------------------- CRON JOB (every 1 minute) --------------------
+/* ------------------------------------------------------------
+   CRON JOB — every 1 minute
+------------------------------------------------------------ */
 cron.schedule("*/1 * * * *", async () => {
   console.log("\n🔄 Running Google Calendar sync...");
 
@@ -67,7 +80,7 @@ cron.schedule("*/1 * * * *", async () => {
       const oauth2Client = getOAuthClient(user);
       const calendar = google.calendar({ version: "v3", auth: oauth2Client });
 
-      // Fetch next 7 days
+      // Fetch events for next 7 days
       const response = await calendar.events.list({
         calendarId: "primary",
         singleEvents: true,
@@ -80,36 +93,40 @@ cron.schedule("*/1 * * * *", async () => {
       const events = response.data.items || [];
       console.log(`📅 Google returned ${events.length} events`);
 
-      // Get true Google time
+      // Get accurate Google server time
       const googleNow = await getGoogleServerTime();
       console.log("Google Server Time:", googleNow.format());
 
-      // -------------------- Process Google Events --------------------
+      /* ------------------------------------------------------------
+         Process Events
+      ------------------------------------------------------------ */
       for (const event of events) {
         const googleId = event.id;
         if (!googleId) continue;
         if (event.status === "cancelled") continue;
-        if (!event.start?.dateTime) continue;
+        if (!event.start?.dateTime) continue; // ignore all-day events
         if (!event.summary || !event.summary.trim()) continue;
 
-        const meetingLink = extractMeetingLink(event);
-        if (!meetingLink) {
+        // Detect meeting link + platform
+        const info = extractMeetingInfo(event);
+        console.log(info);
+        if (!info) {
           console.log(`🚫 Skipping NON-MEETING event: ${event.summary}`);
           continue;
         }
+
+        const { meeting_url, meeting_platform } = info;
 
         const startRaw = event.start.dateTime;
         const endRaw = event.end.dateTime;
 
         const eventEnd = dayjs(endRaw);
-        const now = dayjs(googleNow);  // keep exact Google TZ
-
-        console.log(eventEnd);
-        console.log(now);
+        const now = googleNow;
 
         const status = eventEnd.isBefore(now) ? "past" : "upcoming";
 
         console.log(`✔ Upserting: ${event.summary} (${status})`);
+        console.log("Platform:", meeting_platform, "| URL:", meeting_url);
 
         await CalendarEvent.upsert({
           google_event_id: googleId,
@@ -119,13 +136,16 @@ cron.schedule("*/1 * * * *", async () => {
           start_time: startRaw,
           end_time: endRaw,
           attendees: event.attendees || [],
-          meeting_link: meetingLink,
+          meeting_link: meeting_url,
+          meeting_platform: meeting_platform,
           status,
         });
       }
 
-      // -------------------- Status recalculation --------------------
-      console.log("🔁 Updating statuses of stored events...");
+      /* ------------------------------------------------------------
+         Recalculate status for stored events
+      ------------------------------------------------------------ */
+      console.log("🔁 Updating stored event statuses...");
 
       const savedEvents = await CalendarEvent.findAll({
         where: { user_id: user.id },

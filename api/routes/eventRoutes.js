@@ -4,11 +4,12 @@ import {
   getPastEvents,
   getEventById
 } from "../controllers/eventController.js";
+import { isAuthenticated } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.get("/upcoming", getUpcomingEvents);
-router.get("/past", getPastEvents);
-router.get("/:id", getEventById);
+router.get("/upcoming", isAuthenticated, getUpcomingEvents);
+router.get("/past", isAuthenticated, getPastEvents);
+router.get("/:id", isAuthenticated, getEventById);
 
 export default router;

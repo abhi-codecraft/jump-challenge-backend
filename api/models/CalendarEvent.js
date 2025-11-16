@@ -52,6 +52,14 @@ export const CalendarEvent = sequelize.define(
       allowNull: false,
       defaultValue: "upcoming",
     },
+    meeting_link: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    meeting_platform: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   },
   {
     tableName: "calendar_events",

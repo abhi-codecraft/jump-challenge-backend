@@ -1,19 +1,18 @@
 import { CalendarEvent } from "../models/CalendarEvent.js";
-import dayjs from "dayjs";
 
 export const getUpcomingEvents = async (req, res) => {
   try {
     const events = await CalendarEvent.findAll({
       where: {
-        user_id: req.user.id,
-        status: "upcoming"
+        user_id: req.user.id,  // <-- NOW WORKS!
+        status: "upcoming",
       },
       order: [["start_time", "ASC"]],
     });
-
+    console.log(req.user.id);
     res.json(events);
   } catch (error) {
-    res.status(500).json({ message: "Error fetching upcoming events" });
+    res.status(500).json({ message: error.message });
   }
 };
 
