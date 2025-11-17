@@ -1,15 +1,17 @@
+// backend/routes/eventRoutes.js
 import express from "express";
 import {
   getUpcomingEvents,
   getPastEvents,
   getEventById
 } from "../controllers/eventController.js";
-import { isAuthenticated } from "../middleware/auth.js";
+import { verifyToken } from "../middleware/verifyToken.js";
 
 const router = express.Router();
 
-router.get("/upcoming", isAuthenticated, getUpcomingEvents);
-router.get("/past", isAuthenticated, getPastEvents);
-router.get("/:id", isAuthenticated, getEventById);
+// Protected routes
+router.get("/upcoming", verifyToken, getUpcomingEvents);
+router.get("/past", verifyToken, getPastEvents);
+router.get("/:id", verifyToken, getEventById);
 
 export default router;

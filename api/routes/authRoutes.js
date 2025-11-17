@@ -1,26 +1,32 @@
 // backend/routes/authRoutes.js
 import express from "express";
 import passport from "passport";
-import { googleStrategySetup, getCurrentUser, logoutUser } from "../controllers/authController.js";
+import {
+  googleStrategySetup,
+  googleCallback,
+  getCurrentUser,
+  logoutUser,
+} from "../controllers/authController.js";
+import { verifyToken } from "../middleware/verifyToken.js";
 
-// Initialize Google strategy
 googleStrategySetup();
 
 const router = express.Router();
 
-// Routes
+// Step 1: Redirect to Google
 router.get("/google", passport.authenticate("google"));
-router.get("/me", getCurrentUser);
 
-router.get("/google/callback",
-  passport.authenticate("google", { failureRedirect: "/" }),
-  (req, res) => {
-    // Redirect to frontend dashboard after successful login
-    res.redirect(process.env.FRONTEND_URL);
-  }
+// Step 2: Google redirects here → we create JWT
+router.get(
+  "/google/callback",
+  passport.authenticate("google", { session: false, failureRedirect: "/" }),
+  googleCallback
 );
 
-router.post("/logout", logoutUser);
+// Protected route
+router.get("/me", verifyToken, getCurrentUser);
 
+// Logout
+router.post("/logout", logoutUser);
 
 export default router;

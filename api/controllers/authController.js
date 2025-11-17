@@ -1,9 +1,10 @@
 // backend/controllers/authController.js
 import passport from "passport";
+import jwt from "jsonwebtoken";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { User } from "../models/User.js";
 
-// Google Strategy
+// ---------------- Google Strategy ----------------
 export const googleStrategySetup = () => {
     passport.use(
         new GoogleStrategy(
@@ -20,12 +21,13 @@ export const googleStrategySetup = () => {
                 accessType: "offline",
                 prompt: "consent",
             },
+
             async (accessToken, refreshToken, profile, done) => {
                 try {
                     const { email, name, picture } = profile._json;
 
                     // Create or update user
-                    const [user, created] = await User.findOrCreate({
+                    const [user] = await User.findOrCreate({
                         where: { email },
                         defaults: {
                             name,
@@ -35,44 +37,46 @@ export const googleStrategySetup = () => {
                         },
                     });
 
-                    // If existing user, update tokens
-                    if (!created) {
-                        await user.update({
-                            google_access_token: accessToken,
-                            google_refresh_token: refreshToken,
-                        });
-                    }
+                    // Update tokens if returning user
+                    await user.update({
+                        google_access_token: accessToken,
+                        google_refresh_token: refreshToken,
+                    });
 
-                    done(null, user);
+                    return done(null, user);
                 } catch (error) {
-                    console.error("Error saving Google user:", error);
-                    done(error, null);
+                    return done(error, null);
                 }
             }
         )
     );
-
-    // Serialize and deserialize
-    passport.serializeUser((user, done) => done(null, user.id));
-
-    passport.deserializeUser(async (id, done) => {
-        try {
-            const user = await User.findByPk(id);
-            done(null, user);
-        } catch (error) {
-            done(error, null);
-        }
-    });
 };
 
+// ---------------- Generate JWT ----------------
+const generateToken = (user) => {
+    return jwt.sign(
+        {
+            id: user.id,
+            email: user.email,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+    );
+};
+
+// ---------------- Handle Google Callback → Return JWT ----------------
+export const googleCallback = (req, res) => {
+    const token = generateToken(req.user);
+
+    // Redirect frontend with token
+    const redirectUrl = `${process.env.FRONTEND_URL}/login?token=${token}`;
+
+    return res.redirect(redirectUrl);
+};
+
+// ---------------- Get Current User via JWT ----------------
 export const getCurrentUser = async (req, res) => {
     try {
-        // If using session with Passport
-        if (!req.user) {
-            return res.status(401).json({ message: "Not logged in" });
-        }
-
-        // Return user info
         res.json({
             id: req.user.id,
             email: req.user.email,
@@ -80,29 +84,11 @@ export const getCurrentUser = async (req, res) => {
             picture: req.user.picture,
         });
     } catch (err) {
-        console.error(err);
         res.status(500).json({ message: "Server error" });
     }
 };
 
-export const logoutUser = (req, res) => {
-    try {
-        // Passport exposes logout() to terminate the session
-        req.logout(err => {
-            if (err) {
-                console.error("Logout error:", err);
-                return res.status(500).json({ message: "Logout failed" });
-            }
-
-            // Destroy session and clear cookie
-            req.session.destroy(() => {
-                res.clearCookie("connect.sid"); // default session cookie name
-                res.json({ message: "Logged out successfully" });
-            });
-        });
-    } catch (err) {
-        console.error("Logout exception:", err);
-        res.status(500).json({ message: "Logout failed" });
-    }
+// ---------------- Logout (Frontend handles token deletion) ----------------
+export const logoutUser = async (req, res) => {
+    res.json({ message: "Logged out (client must delete token)" });
 };
-
