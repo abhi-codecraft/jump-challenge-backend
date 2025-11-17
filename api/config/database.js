@@ -5,16 +5,16 @@ const fs = require('fs');
 
 // Determine the environment and set the correct .env file
 const env = process.env.NODE_ENV || 'local';
-const envFilePath = path.resolve(__dirname, `../../.env.${env}`);
-dotenv.config({ path: envFilePath });
+// const envFilePath = path.resolve(__dirname, `../../.env.${env}`);
+// dotenv.config({ path: envFilePath });
 
-// Ensure all required environment variables are set
-const requiredEnvVariables = ['DB_NAME', 'DB_USER', 'DB_PASS', 'DB_HOST', 'DB_DIALECT'];
-requiredEnvVariables.forEach((variable) => {
-  if (!process.env[variable]) {
-    throw new Error(`Environment variable ${variable} is not set.`);
-  }
-});
+// // Ensure all required environment variables are set
+// const requiredEnvVariables = ['DB_NAME', 'DB_USER', 'DB_PASS', 'DB_HOST', 'DB_DIALECT'];
+// requiredEnvVariables.forEach((variable) => {
+//   if (!process.env[variable]) {
+//     throw new Error(`Environment variable ${variable} is not set.`);
+//   }
+// });
 
 let dialectOptions = {};
 
