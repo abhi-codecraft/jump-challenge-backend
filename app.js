@@ -1,11 +1,10 @@
-// app.js
 import express from "express";
 import session from "express-session";
 import passport from "passport";
 import dotenv from "dotenv";
-import mysqlSession from "express-mysql-session";
 import path from "path";
 import fs from "fs";
+import SequelizeStoreInit from "connect-session-sequelize";
 
 dotenv.config();
 
@@ -14,23 +13,18 @@ import authRoutes from "./api/routes/authRoutes.js";
 import eventRoutes from "./api/routes/eventRoutes.js";
 import "./api/cron/calendarCron.js";
 
-// ---------------------- APP ----------------------
 const app = express();
 const port = process.env.PORT || 3333;
 const env = process.env.NODE_ENV || "local";
 
-// ---------------------- PARSE JSON ----------------------
-app.use(express.json());
-
-// ---------------------- CORS ----------------------
+// -------------------- CORS --------------------
 app.use((req, res, next) => {
   const allowedOrigins = [
     "http://localhost:5173",
-    "https://victorious-pebble-0944a0f00.3.azurestaticapps.net"
+    "https://victorious-pebble-0944a0f00.3.azurestaticapps.net",
   ];
 
   const origin = req.headers.origin;
-
   if (allowedOrigins.includes(origin)) {
     res.header("Access-Control-Allow-Origin", origin);
     res.header("Access-Control-Allow-Credentials", "true");
@@ -44,61 +38,57 @@ app.use((req, res, next) => {
   next();
 });
 
-// ---------------------- MYSQL SESSION STORE ----------------------
-const MySQLStore = mysqlSession(session);
+app.use(express.json());
 
-let sessionStoreOptions = {
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
-  ssl: {
-    require: true,
-    rejectUnauthorized: false  // ★ MUST HAVE for Azure
-  }
-};
+// -------------------- SESSION STORE (SEQUELIZE) --------------------
+const SequelizeStore = SequelizeStoreInit(session.Store);
 
-const sessionStore = new MySQLStore(sessionStoreOptions);
+// Use the SAME Sequelize instance using SSL
+const sessionStore = new SequelizeStore({
+  db: sequelize,
+});
 
-// ---------------------- SESSION CONFIG ----------------------
+// -------------------- EXPRESS SESSION --------------------
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "super_secret_string",
+    secret: process.env.SESSION_SECRET || "supersecret",
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-      secure: env !== "local",                    // HTTPS only in production
+      secure: env !== "local",
       httpOnly: true,
-      sameSite: env !== "local" ? "none" : "lax", // Required for Azure Static Web Apps
-      maxAge: 24 * 60 * 60 * 1000                 // 1 day
-    }
+      sameSite: env !== "local" ? "none" : "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+    },
   })
 );
 
-// ---------------------- PASSPORT ----------------------
+// REQUIRED for Sequelize session store
+sessionStore.sync();
+
+// -------------------- PASSPORT --------------------
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ---------------------- ROUTES ----------------------
+// -------------------- ROUTES --------------------
 app.use("/auth", authRoutes);
 app.use("/events", eventRoutes);
 
-// ---------------------- ROOT ----------------------
+// -------------------- ROOT --------------------
 app.get("/", (req, res) => {
-  res.send("Backend API is running");
+  res.send("Backend API running");
 });
 
-// ---------------------- START SERVER ----------------------
+// -------------------- START SERVER --------------------
 sequelize
   .sync({ alter: false })
   .then(() => {
-    console.log("Database synced successfully");
+    console.log("Database connected with SSL");
     app.listen(port, "0.0.0.0", () => {
       console.log(`Server running at http://localhost:${port}`);
     });
   })
   .catch((err) => {
-    console.error("Database connection failed:", err);
+    console.error("DB connection failed:", err);
   });
