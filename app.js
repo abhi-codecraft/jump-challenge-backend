@@ -21,7 +21,10 @@ app.use(express.json()); // replaces body-parser
 
 // CORS middleware
 app.use((req, res, next) => {
-  const allowedOrigins = ['http://localhost:5173'];
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'https://victorious-pebble-0944a0f00.3.azurestaticapps.net'
+  ];
   const origin = req.headers.origin;
 
   if (allowedOrigins.includes(origin)) {
