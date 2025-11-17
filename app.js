@@ -3,9 +3,9 @@ import express from "express";
 import session from "express-session";
 import passport from "passport";
 import dotenv from "dotenv";
+import mysqlSession from "express-mysql-session";
 import path from "path";
 import fs from "fs";
-import mysqlSession from "express-mysql-session";
 
 dotenv.config();
 
@@ -19,10 +19,10 @@ const app = express();
 const port = process.env.PORT || 3333;
 const env = process.env.NODE_ENV || "local";
 
-// ---------------------- PARSERS ----------------------
+// ---------------------- PARSE JSON ----------------------
 app.use(express.json());
 
-// ---------------------- CORS (Azure Compatible) ----------------------
+// ---------------------- CORS ----------------------
 app.use((req, res, next) => {
   const allowedOrigins = [
     "http://localhost:5173",
@@ -30,6 +30,7 @@ app.use((req, res, next) => {
   ];
 
   const origin = req.headers.origin;
+
   if (allowedOrigins.includes(origin)) {
     res.header("Access-Control-Allow-Origin", origin);
     res.header("Access-Control-Allow-Credentials", "true");
@@ -43,7 +44,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ---------------------- SESSION STORE ----------------------
+// ---------------------- MYSQL SESSION STORE ----------------------
 const MySQLStore = mysqlSession(session);
 
 let sessionStoreOptions = {
@@ -52,31 +53,26 @@ let sessionStoreOptions = {
   user: process.env.DB_USER,
   password: process.env.DB_PASS,
   database: process.env.DB_NAME,
-};
-
-// Use SSL ONLY in production
-if (env !== "local") {
-  const sslCertPath = path.resolve("api/config/fullchain.pem");
-  sessionStoreOptions.ssl = {
+  ssl: {
     require: true,
-    ca: fs.readFileSync(sslCertPath),
-  };
-}
+    rejectUnauthorized: false  // ★ MUST HAVE for Azure
+  }
+};
 
 const sessionStore = new MySQLStore(sessionStoreOptions);
 
 // ---------------------- SESSION CONFIG ----------------------
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "supersecret123",
+    secret: process.env.SESSION_SECRET || "super_secret_string",
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-      secure: env !== "local",                         // HTTPS-only in production
+      secure: env !== "local",                    // HTTPS only in production
       httpOnly: true,
-      sameSite: env !== "local" ? "none" : "lax",      // Azure fix
-      maxAge: 24 * 60 * 60 * 1000                      // 1 day
+      sameSite: env !== "local" ? "none" : "lax", // Required for Azure Static Web Apps
+      maxAge: 24 * 60 * 60 * 1000                 // 1 day
     }
   })
 );
@@ -89,18 +85,20 @@ app.use(passport.session());
 app.use("/auth", authRoutes);
 app.use("/events", eventRoutes);
 
-// ---------------------- TEST ROUTE ----------------------
+// ---------------------- ROOT ----------------------
 app.get("/", (req, res) => {
-  res.send("Backend API running");
+  res.send("Backend API is running");
 });
 
 // ---------------------- START SERVER ----------------------
 sequelize
   .sync({ alter: false })
   .then(() => {
-    console.log("Database synced");
+    console.log("Database synced successfully");
     app.listen(port, "0.0.0.0", () => {
-      console.log(`Server started on http://localhost:${port}`);
+      console.log(`Server running at http://localhost:${port}`);
     });
   })
-  .catch((err) => console.error("DB connection failed:", err));
+  .catch((err) => {
+    console.error("Database connection failed:", err);
+  });
