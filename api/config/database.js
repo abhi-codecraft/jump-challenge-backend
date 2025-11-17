@@ -20,7 +20,7 @@ let dialectOptions = {};
 
 if (env !== 'local') {
   // Only include SSL config in non-local environments
-  const sslCertPath = path.resolve(__dirname, './DigiCertGlobalRootCA.crt.pem');
+  const sslCertPath = path.resolve(__dirname, './fullchain.pem');
   dialectOptions = {
     ssl: {
       require: true,

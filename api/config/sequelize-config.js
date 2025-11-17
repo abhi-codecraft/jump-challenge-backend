@@ -19,7 +19,7 @@ const baseConfig = {
 
 let dialectOptions = {};
 if (env !== 'local') {
-  const sslCertPath = path.resolve(__dirname, './DigiCertGlobalRootCA.crt.pem');
+  const sslCertPath = path.resolve(__dirname, './fullchain.pem');
   dialectOptions = {
     ssl: {
       require: true,
