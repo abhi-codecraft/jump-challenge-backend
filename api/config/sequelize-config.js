@@ -4,8 +4,8 @@ const dotenv = require('dotenv');
 const fs = require('fs');
 
 const env = process.env.NODE_ENV || 'local';
-// const envFilePath = path.resolve(__dirname, `../../.env.${env}`);
-// dotenv.config({ path: envFilePath });
+const envFilePath = path.resolve(__dirname, `../../.env.${env}`);
+dotenv.config({ path: envFilePath });
 
 const baseConfig = {
   username: process.env.DB_USER,
