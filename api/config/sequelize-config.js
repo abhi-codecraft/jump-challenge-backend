@@ -3,7 +3,7 @@ const path = require('path');
 const dotenv = require('dotenv');
 const fs = require('fs');
 
-// const env = process.env.NODE_ENV || 'local';
+const env = process.env.NODE_ENV || 'local';
 // const envFilePath = path.resolve(__dirname, `../../.env.${env}`);
 // dotenv.config({ path: envFilePath });
 
@@ -12,8 +12,8 @@ const baseConfig = {
   password: process.env.DB_PASS,
   database: process.env.DB_NAME,
   host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 5432,
-  dialect: process.env.DB_DIALECT || 'postgres',
+  port: process.env.DB_PORT || 3306,
+  dialect: process.env.DB_DIALECT || 'mysql',
 };
 
 
